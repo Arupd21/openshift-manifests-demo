@@ -1,0 +1,51 @@
+---
+# StorageClass - defines how storage is provisioned
+# Different classes for different performance needs and environments
+#
+# Azure Disk CSI - ReadWriteOnce only (single node)
+# Azure File CSI - ReadWriteMany (multiple nodes - for shared storage)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+  annotations:
+    description: "Premium SSD storage for production databases"
+provisioner: disk.csi.azure.com       # Azure Disk CSI driver
+parameters:
+  skuName: Premium_LRS                # Premium SSD
+  kind: Managed
+reclaimPolicy: Retain                 # Keep data after PVC deletion
+volumeBindingMode: WaitForFirstConsumer  # Wait until pod is scheduled
+allowVolumeExpansion: true            # Allow resizing without downtime
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: standard-hdd
+  annotations:
+    description: "Standard HDD storage for dev/test - cost optimised"
+provisioner: disk.csi.azure.com
+parameters:
+  skuName: Standard_LRS               # Standard HDD - cheaper
+  kind: Managed
+reclaimPolicy: Delete                 # Delete volume when PVC is deleted
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+---
+# PersistentVolumeClaim - requests storage from a StorageClass
+# Pod mounts this PVC to persist data across restarts
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data-pvc
+  namespace: demo-project
+  annotations:
+    description: "PVC for application data - uses fast-ssd StorageClass"
+spec:
+  accessModes:
+    - ReadWriteOnce           # Only one node can mount at a time (Azure Disk)
+    # Use ReadWriteMany for Azure File CSI if multiple pods need the same volume
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 5Gi

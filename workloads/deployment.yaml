@@ -1,0 +1,136 @@
+---
+# Production-grade Deployment
+# Includes: resource limits, health probes, security context,
+# pod anti-affinity, rolling update strategy, and PodDisruptionBudget
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-app
+  namespace: demo-project
+  labels:
+    app: demo-app
+    version: "1.0"
+    team: platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: demo-app
+  # Rolling update - zero downtime deployments
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0     # Never reduce below desired replicas
+      maxSurge: 1           # Add 1 extra pod during update
+  template:
+    metadata:
+      labels:
+        app: demo-app
+        version: "1.0"
+    spec:
+      serviceAccountName: app-serviceaccount   # Always use dedicated SA
+      # Spread pods across nodes - avoid single point of failure
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: demo-app
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: demo-app
+          image: quay.io/example/demo-app:1.0   # Never use 'latest' in production
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          # Resource requests and limits - ALWAYS set these
+          # Requests = scheduler uses this to find a node
+          # Limits = hard ceiling (OOMKilled if exceeded for memory)
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          # Liveness probe - restart pod if app is unhealthy
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          # Readiness probe - only send traffic when app is ready
+          # Critical for zero-downtime rolling updates
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          # Startup probe - give slow-starting apps extra time
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 10
+          # Security context - run as non-root
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1001
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: APP_ENV
+              value: "production"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: db-password
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: app-config
+---
+# PodDisruptionBudget - ensure HA during node maintenance/upgrades
+# Prevents cluster operations from taking down all pods simultaneously
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: demo-app-pdb
+  namespace: demo-project
+spec:
+  minAvailable: 2           # Always keep at least 2 pods running
+  selector:
+    matchLabels:
+      app: demo-app
+---
+# Service to expose the deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-app-svc
+  namespace: demo-project
+  labels:
+    app: demo-app
+spec:
+  selector:
+    app: demo-app
+  ports:
+    - name: 8080-tcp
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP

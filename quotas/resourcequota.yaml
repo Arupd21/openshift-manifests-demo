@@ -1,0 +1,61 @@
+---
+# ResourceQuota - limits total resource consumption per namespace
+# Prevents one team from consuming all cluster resources
+# Apply per namespace for multi-tenant clusters
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: demo-project-quota
+  namespace: demo-project
+  annotations:
+    description: "Resource quota for demo-project namespace - prevents resource exhaustion"
+spec:
+  hard:
+    # Compute resources
+    requests.cpu: "4"           # Total CPU requests across all pods
+    limits.cpu: "8"             # Total CPU limits across all pods
+    requests.memory: "4Gi"      # Total memory requests
+    limits.memory: "8Gi"        # Total memory limits
+    # Object counts
+    pods: "20"                  # Maximum number of pods
+    services: "10"              # Maximum number of services
+    persistentvolumeclaims: "10" # Maximum number of PVCs
+    secrets: "20"               # Maximum number of secrets
+    configmaps: "20"            # Maximum number of configmaps
+    # OpenShift specific
+    count/routes.route.openshift.io: "10"
+---
+# LimitRange - sets default requests/limits for pods that don't specify their own
+# Prevents BestEffort pods (no requests/limits) from landing in the namespace
+# BestEffort pods are evicted first under node pressure
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: demo-project-limits
+  namespace: demo-project
+  annotations:
+    description: "Default resource limits - prevents BestEffort pods and over-provisioning"
+spec:
+  limits:
+    - type: Container
+      default:                  # Applied if container doesn't specify limits
+        cpu: "500m"
+        memory: "512Mi"
+      defaultRequest:           # Applied if container doesn't specify requests
+        cpu: "100m"
+        memory: "128Mi"
+      max:                      # Container cannot exceed these values
+        cpu: "2"
+        memory: "2Gi"
+      min:                      # Container must request at least these values
+        cpu: "50m"
+        memory: "64Mi"
+    - type: Pod
+      max:
+        cpu: "4"
+        memory: "4Gi"
+    - type: PersistentVolumeClaim
+      max:
+        storage: "10Gi"
+      min:
+        storage: "1Gi"

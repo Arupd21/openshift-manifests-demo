@@ -1,0 +1,100 @@
+---
+# STEP 1: Default deny all ingress and egress
+# Apply this FIRST to the namespace
+# Once applied, only explicitly allowed traffic is permitted
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: demo-project
+  annotations:
+    description: "Default deny all - apply first, then add specific allow policies"
+spec:
+  podSelector: {}    # Applies to ALL pods in namespace
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# STEP 2: Allow frontend pods to reach backend pods on port 8080
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-backend
+  namespace: demo-project
+  annotations:
+    description: "Allow frontend pods to communicate with backend on port 8080"
+spec:
+  podSelector:
+    matchLabels:
+      app: backend          # This policy applies to backend pods
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend # Only frontend pods can send traffic
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# STEP 3: Allow backend pods to reach database on port 5432
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-database
+  namespace: demo-project
+  annotations:
+    description: "Allow backend pods to communicate with database on port 5432"
+spec:
+  podSelector:
+    matchLabels:
+      app: database         # Applies to database pods
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: backend  # Only backend pods can reach the database
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# STEP 4: Allow OpenShift router (HAProxy) to reach all app pods
+# Critical: Without this, Routes won't work with default-deny-all applied
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-router-ingress
+  namespace: demo-project
+  annotations:
+    description: "Allow HAProxy router from openshift-ingress namespace to reach pods"
+spec:
+  podSelector: {}           # Applies to all pods
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: ingress
+---
+# STEP 5: Allow DNS egress (required for service discovery)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: demo-project
+  annotations:
+    description: "Allow all pods to reach CoreDNS for service discovery"
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

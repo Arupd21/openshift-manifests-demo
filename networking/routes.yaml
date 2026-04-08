@@ -1,0 +1,78 @@
+---
+# EDGE ROUTE
+# TLS terminates at the HAProxy router
+# Backend communication is plain HTTP (unencrypted inside cluster)
+# Most common route type - simplest TLS setup
+# insecureEdgeTerminationPolicy: Redirect forces HTTP -> HTTPS
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: demo-app-edge
+  namespace: demo-project
+  annotations:
+    description: "Edge route - TLS terminated at router, HTTP to backend"
+spec:
+  host: demo-app.apps.cluster.example.com
+  to:
+    kind: Service
+    name: demo-app-svc
+    weight: 100
+  port:
+    targetPort: 8080-tcp
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+---
+# PASSTHROUGH ROUTE
+# TLS is NOT terminated at the router
+# Encrypted traffic passes directly to the pod
+# Pod/application must handle TLS itself
+# Use when: app requires mutual TLS (mTLS) or manages its own certificates
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: demo-app-passthrough
+  namespace: demo-project
+  annotations:
+    description: "Passthrough route - TLS passes directly to pod, app handles SSL"
+spec:
+  host: demo-secure.apps.cluster.example.com
+  to:
+    kind: Service
+    name: demo-app-secure-svc
+    weight: 100
+  port:
+    targetPort: 8443-tcp
+  tls:
+    termination: passthrough
+  wildcardPolicy: None
+---
+# RE-ENCRYPT ROUTE
+# TLS terminates at the router AND re-encrypts to the backend pod
+# Two separate TLS connections: client -> router, router -> pod
+# Use when: end-to-end encryption is required with different certs
+# Most secure but most complex to configure
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: demo-app-reencrypt
+  namespace: demo-project
+  annotations:
+    description: "Re-encrypt route - TLS at router and re-encrypted to backend"
+spec:
+  host: demo-reencrypt.apps.cluster.example.com
+  to:
+    kind: Service
+    name: demo-app-internal-svc
+    weight: 100
+  port:
+    targetPort: 8443-tcp
+  tls:
+    termination: reencrypt
+    insecureEdgeTerminationPolicy: Redirect
+    # destinationCACertificate: |
+    #   -----BEGIN CERTIFICATE-----
+    #   <backend CA certificate here>
+    #   -----END CERTIFICATE-----
+  wildcardPolicy: None

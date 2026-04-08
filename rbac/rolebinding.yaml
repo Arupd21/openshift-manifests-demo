@@ -1,0 +1,29 @@
+---
+# RoleBinding - binds developer-role to a specific user within demo-project namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer-rolebinding
+  namespace: demo-project
+subjects:
+  - kind: User
+    name: developer-user     # Replace with actual username
+    apiGroup: rbac.authorization.k8s.io
+  - kind: ServiceAccount
+    name: app-serviceaccount
+    namespace: demo-project
+roleRef:
+  kind: Role
+  name: developer-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# ServiceAccount for application pods
+# Always use a dedicated ServiceAccount per application
+# Never use the default ServiceAccount in production
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: app-serviceaccount
+  namespace: demo-project
+  annotations:
+    description: "Dedicated ServiceAccount for demo application pods"

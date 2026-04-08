@@ -1,0 +1,39 @@
+---
+# OperatorGroup - defines which namespaces the Operator watches
+# Must exist in a namespace BEFORE creating a Subscription
+# Without OperatorGroup, OLM will not install a namespaced Operator
+#
+# Options:
+#   AllNamespaces  - Operator watches all namespaces (install in openshift-operators)
+#   SingleNamespace - Operator watches only this namespace
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: demo-operatorgroup
+  namespace: demo-project
+  annotations:
+    description: "OperatorGroup for demo-project - SingleNamespace scope"
+spec:
+  targetNamespaces:
+    - demo-project            # Operator will only watch this namespace
+---
+# Subscription - tells OLM which Operator to install
+# OLM will find the Operator in the CatalogSource and create an InstallPlan
+#
+# installPlanApproval:
+#   Automatic - OLM installs/upgrades without manual approval (development)
+#   Manual    - Requires human approval before installing (production recommended)
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: prometheus-operator
+  namespace: demo-project
+  annotations:
+    description: "Install Prometheus Operator via OLM for monitoring"
+spec:
+  channel: stable                         # Which update channel to follow
+  name: prometheus                        # Operator package name in CatalogSource
+  source: community-operators             # Which CatalogSource to use
+  sourceNamespace: openshift-marketplace  # Where the CatalogSource lives
+  installPlanApproval: Manual             # Require approval in production
+  # startingCSV: prometheusoperator.v0.65.0  # Pin to specific version (optional)

@@ -1,0 +1,56 @@
+---
+# Custom SCC - Principle of Least Privilege
+# Use when an application needs to run as a specific UID
+# but does NOT need root or host-level access
+# 
+# Usage:
+#   oc create -f custom-scc.yaml
+#   oc adm policy add-scc-to-user custom-uid1001 -z app-serviceaccount -n demo-project
+#
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: custom-uid1001
+  annotations:
+    description: "Custom SCC for applications requiring UID 1001. No root, no host access."
+# No extra Linux capabilities allowed
+allowedCapabilities: []
+defaultAddCapabilities: []
+# Drop ALL capabilities - maximum security
+requiredDropCapabilities:
+  - ALL
+# No privileged containers
+allowPrivilegedContainer: false
+allowPrivilegeEscalation: false
+# No host-level access
+allowHostDirVolumePlugin: false
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+# Run as exactly UID 1001
+runAsUser:
+  type: MustRunAs
+  uid: 1001
+# SELinux - use cluster default
+seLinuxContext:
+  type: MustRunAs
+# FSGroup must be 1001
+fsGroup:
+  type: MustRunAs
+  ranges:
+    - min: 1001
+      max: 1001
+# Supplemental groups restricted to 1001
+supplementalGroups:
+  type: MustRunAs
+  ranges:
+    - min: 1001
+      max: 1001
+# Only allow necessary volume types
+volumes:
+  - configMap
+  - secret
+  - persistentVolumeClaim
+  - emptyDir
+  - projected
